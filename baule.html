@@ -495,9 +495,10 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
 
     <div class="card pad" style="margin-bottom:34px">
       <h3 style="font-size:22px;margin-bottom:18px">📅 Ajouter au programme</h3>
-      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
         <div><label class="field">Jour</label><input id="a-day" class="input" placeholder="Samedi"></div>
         <div><label class="field">Heure</label><input id="a-time" class="input" placeholder="14h00"></div>
+        <div><label class="field">Prix (€, option.)</label><input id="a-price" class="input" type="number" min="0" step="0.01" placeholder="35"></div>
         <div style="grid-column:span 2"><label class="field">Activité</label><input id="a-title" class="input" placeholder="Sortie catamaran"></div>
       </div>
       <div style="margin-top:14px">
@@ -540,6 +541,10 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
               <div><label class="field">Payé par</label><select id="e-payer" class="input"></select></div>
             </div>
           </div>
+          <label for="e-perso" style="display:flex;align-items:center;gap:11px;margin-top:16px;cursor:pointer;background:var(--paper);border:var(--bw) solid var(--ink);border-radius:var(--radius-sm);padding:12px 15px;box-shadow:2px 2px 0 var(--offset);font-weight:700;font-size:14px;line-height:1.35">
+            <input type="checkbox" id="e-perso" style="width:20px;height:20px;accent-color:var(--coral);flex:none;cursor:pointer">
+            💳 Dépense perso — pas de remboursement (non partagée)
+          </label>
           <button class="btn coral" style="margin-top:16px" data-act="add-exp"><i class="fa-solid fa-receipt"></i> Enregistrer</button>
         </div>
         <div class="card pad">
@@ -549,7 +554,7 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
       </div>
       <div>
         <div class="card pad" style="background:var(--ocean);color:var(--paper-2);margin-bottom:20px">
-          <div class="eyebrow" style="color:var(--paper-2)">Total du séjour</div>
+          <div class="eyebrow" style="color:var(--paper-2)">Total partagé du séjour</div>
           <div class="big-total" id="bigTotal">0 €</div>
           <div id="perHead" style="font-weight:700;margin-top:6px;opacity:.9"></div>
         </div>
@@ -576,7 +581,7 @@ const PALETTE = ["#FF5D49","#0E7C86","#FFB627","#7FC6D9","#F4978E","#8E7DBE","#5
 /* ---------- DEFAULTS ---------- */
 const D = {
   meals:[{id:"m1",jour:"VENDREDI",moment:"SOIR",titre:"Moules à la crème de poireaux",img:"https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=700&q=80",ingredients:"Moules de bouchot\nCrème fraîche liquide\nPoireaux émincés\nBeurre demi-sel",recette:"Faire fondre les poireaux au beurre, ajouter les moules à feu vif, napper de crème au moment de servir."}],
-  activities:[{id:"a1",jour:"Samedi",heure:"16h00",titre:"Session catamaran",desc:"Rendez-vous à la base nautique de la baie de La Baule. Réservation confirmée."}],
+  activities:[{id:"a1",jour:"Samedi",heure:"16h00",titre:"Session catamaran",desc:"Rendez-vous à la base nautique de la baie de La Baule. Réservation confirmée.",prix:"35"}],
   packingCategories:["🩳 Garde-robe Océan","🧴 Trousse de Soins","🔌 Matériel & Utiles"],
   packingItems:[{id:"p1",cat:"🩳 Garde-robe Océan",name:"Sweat chaud pour le soir",done:false},{id:"p2",cat:"🧴 Trousse de Soins",name:"Crème solaire haute protection",done:false}],
   courseCategories:["🥦 Primeur & Légumes","🥩 Poissonnerie & Frais","🍹 Cave à Apéro"],
@@ -594,6 +599,8 @@ normalize();
 function normalize(){
   for(const k in D){ if(data[k]===undefined) data[k]=structuredClone(D[k]); }
   data.participants.forEach((p,i)=>{ if(!p.color) p.color=PALETTE[i%PALETTE.length]; });
+  // dépenses sans flag => considérées comme partagées
+  data.expenses.forEach(e=>{ if(e.split===undefined) e.split=true; });
 }
 
 /* ---------- FIREBASE ---------- */
@@ -626,6 +633,7 @@ const $=s=>document.querySelector(s);
 const val=id=>{const e=document.getElementById(id);return e?e.value.trim():"";};
 const clear=(...ids)=>ids.forEach(i=>{const e=document.getElementById(i);if(e)e.value="";});
 const personById=id=>data.participants.find(p=>p.id===id);
+const numPrix=p=>{const n=parseFloat(String(p==null?"":p).replace(",",".").replace(/[^\d.]/g,""));return isNaN(n)?0:n;};
 
 /* ---------- TABS ---------- */
 function switchTab(t){
@@ -645,13 +653,13 @@ function renderStats(){
   const box=$("#statsStrip"); if(!box)return;
   const pc=data.packingItems.length, pd=data.packingItems.filter(i=>i.done).length;
   const cc=data.courseItems.length, cd=data.courseItems.filter(i=>i.done).length;
-  const total=data.expenses.reduce((s,e)=>s+(+e.amount||0),0);
+  const total=data.expenses.filter(e=>e.split!==false).reduce((s,e)=>s+(+e.amount||0),0);
   const mk=(lab,val,sub,pct,color)=>`<div class="stat" data-tab="${sub}"><div class="lab">${lab}</div><div class="val">${val}</div>${pct!=null?`<div class="progress"><i style="width:${pct}%;background:${color}"></i></div>`:`<div class="lab" style="margin-top:6px">${color}</div>`}</div>`;
   box.innerHTML =
     mk("Recettes",data.meals.length,"repas",null,"fiches au menu")+
     mk("Caddie",`${cd}<small>/${cc}</small>`,"repas",cc?Math.round(cd/cc*100):0,"var(--ocean)")+
     mk("Bagages",`${pd}<small>/${pc}</small>`,"bagages",pc?Math.round(pd/pc*100):0,"var(--coral)")+
-    mk("Budget",`${total.toFixed(0)}<small> €</small>`,"budget",null,`${data.expenses.length} dépense(s)`);
+    mk("Budget partagé",`${total.toFixed(0)}<small> €</small>`,"budget",null,`${data.expenses.length} dépense(s)`);
 }
 
 /* --- PEOPLE --- */
@@ -732,24 +740,37 @@ function renderActs(){
         <div class="tl-body">
           <h3 class="edit" contenteditable data-act="edit-act" data-id="${a.id}" data-f="titre">${esc(a.titre)}</h3>
           <p class="edit" contenteditable data-act="edit-act" data-id="${a.id}" data-f="desc">${esc(a.desc)||"Détails…"}</p>
+          <span contenteditable data-act="edit-act" data-id="${a.id}" data-f="prix" title="Prix de l'activité (cliquer pour modifier)" style="display:inline-block;margin-top:9px;font-family:'Fraunces',serif;font-weight:900;font-size:15px;color:${a.prix?"var(--ocean)":"var(--muted)"};background:var(--paper);border:var(--bw) solid var(--ink);border-radius:30px;padding:3px 13px;box-shadow:2px 2px 0 var(--offset);outline:none">${a.prix?esc(a.prix)+" €":"+ prix"}</span>
         </div>
         <button class="icon-btn del" data-act="del-act" data-id="${a.id}"><i class="fa-solid fa-trash"></i></button>
       </div></div>`).join("")}
     </div></div>`;
   }).join("");
+  const totalActs=data.activities.reduce((s,a)=>s+numPrix(a.prix),0);
+  if(totalActs>0){
+    box.innerHTML += `<div class="card pad" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <span class="eyebrow" style="margin:0">Budget activités prévu</span>
+      <span style="font-family:'Fraunces',serif;font-weight:900;font-size:30px;color:var(--coral)">${totalActs.toFixed(2).replace(/\.00$/,"")} €</span></div>`;
+  }
 }
 
 /* --- BUDGET --- */
 function renderBudget(){
   const expBox=$("#expBox"), setBox=$("#settleBox"); if(!expBox)return;
-  const total=data.expenses.reduce((s,e)=>s+(+e.amount||0),0);
-  $("#bigTotal").textContent = total.toFixed(2).replace(/\.00$/,"")+" €";
+  const shared=data.expenses.filter(e=>e.split!==false);
+  const sharedTotal=shared.reduce((s,e)=>s+(+e.amount||0),0);
+  const persoTotal=data.expenses.filter(e=>e.split===false).reduce((s,e)=>s+(+e.amount||0),0);
+  $("#bigTotal").textContent = sharedTotal.toFixed(2).replace(/\.00$/,"")+" €";
   const n=data.participants.length;
-  $("#perHead").textContent = n? `soit ~${(total/n).toFixed(0)} € par personne (${n})` : "Ajoutez des participants pour répartir.";
+  let head = n? `soit ~${(sharedTotal/n).toFixed(0)} € par personne (${n})` : "Ajoutez des participants pour répartir.";
+  if(persoTotal>0) head += `<br><span style="font-size:13px;opacity:.85">+ ${persoTotal.toFixed(2).replace(/\.00$/,"")} € de dépenses perso (non partagées)</span>`;
+  $("#perHead").innerHTML = head;
   expBox.innerHTML = data.expenses.length? data.expenses.slice().reverse().map(e=>{
     const p=personById(e.payer);
+    const perso=e.split===false;
     return `<div class="exp-row"><span class="who" style="background:${p?p.color:"#ccc"}">${p?esc(p.name[0].toUpperCase()):"?"}</span>
-      <div class="info"><b>${esc(e.label)}</b><small>payé par ${p?esc(p.name):"?"} · partagé entre tous</small></div>
+      <div class="info"><b>${esc(e.label)}</b><small>payé par ${p?esc(p.name):"?"} · ${perso?"perso, non partagée":"partagé entre tous"}</small></div>
+      ${perso?`<span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:var(--sun);color:#1B2430;border:1.5px solid var(--ink);border-radius:20px;padding:3px 9px;font-weight:700;white-space:nowrap">perso</span>`:""}
       <span class="amt">${(+e.amount).toFixed(2)} €</span>
       <button class="icon-btn del" data-act="del-exp" data-id="${e.id}" style="width:26px;height:26px;font-size:10px">✕</button></div>`;
   }).join("") : `<p class="empty">Aucune dépense enregistrée.</p>`;
@@ -757,12 +778,13 @@ function renderBudget(){
 }
 function settlement(){
   const n=data.participants.length;
-  if(n<2||!data.expenses.length) return `<p class="empty">Ajoutez des participants et des dépenses.</p>`;
+  const shared=data.expenses.filter(e=>e.split!==false);
+  if(n<2||!shared.length) return `<p class="empty">Ajoutez des participants et des dépenses partagées.</p>`;
   
   const bal={}; const paid={};
   data.participants.forEach(p=>{ bal[p.id]=0; paid[p.id]=0; });
   
-  data.expenses.forEach(e=>{
+  shared.forEach(e=>{
     const amt=+e.amount||0;
     const valid=data.participants;
     if(!valid.length) return;
@@ -775,7 +797,7 @@ function settlement(){
   });
 
   let html = `<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1.5px dashed var(--muted)">`;
-  html += `<div style="font-size:11px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px">Bilan par personne</div>`;
+  html += `<div style="font-size:11px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px">Bilan par personne (partagé)</div>`;
   data.participants.forEach(p=>{
      const b = bal[p.id];
      const color = b > 0.01 ? "var(--ocean)" : (b < -0.01 ? "var(--coral)" : "var(--muted)");
@@ -893,9 +915,9 @@ const A = {
   "toggle":(el)=>{const type=el.dataset.type;const it=data[LC[type].items].find(i=>i.id===el.dataset.id);if(it){it.done=!it.done;save();renderList(type);renderStats();if(it.done)checkAllDone(type,it.cat,el);}},
   "del-item":(el)=>{const type=el.dataset.type;data[LC[type].items]=data[LC[type].items].filter(i=>i.id!==el.dataset.id);save();renderList(type);renderStats();},
   "del-cat":(el)=>{const type=el.dataset.type,cat=el.dataset.cat;if(confirm(`Supprimer « ${cat} » et son contenu ?`)){data[LC[type].cats]=data[LC[type].cats].filter(c=>c!==cat);data[LC[type].items]=data[LC[type].items].filter(i=>i.cat!==cat);save();renderList(type);renderStats();}},
-  "add-act":()=>{data.activities.push({id:uid(),jour:val("a-day")||"Jour",heure:val("a-time")||"–",titre:val("a-title")||"Activité",desc:val("a-desc")});clear("a-title","a-desc","a-time");save();renderActs();},
+  "add-act":()=>{data.activities.push({id:uid(),jour:val("a-day")||"Jour",heure:val("a-time")||"–",titre:val("a-title")||"Activité",desc:val("a-desc"),prix:val("a-price")});clear("a-title","a-desc","a-time","a-price");save();renderActs();},
   "del-act":(el)=>{if(confirm("Supprimer cette activité ?")){data.activities=data.activities.filter(a=>a.id!==el.dataset.id);save();renderActs();}},
-  "add-exp":()=>{const label=val("e-label"),amount=parseFloat(val("e-amount"));if(!label||!(amount>0)){alert("Indiquez un intitulé et un montant.");return;}if(!data.participants.length){alert("Ajoutez d'abord des participants (page Accueil).");return;}const payer=$("#e-payer").value;data.expenses.push({id:uid(),label,amount,payer});clear("e-label","e-amount");save();renderBudget();renderStats();},
+  "add-exp":()=>{const label=val("e-label"),amount=parseFloat(val("e-amount"));if(!label||!(amount>0)){alert("Indiquez un intitulé et un montant.");return;}if(!data.participants.length){alert("Ajoutez d'abord des participants (page Accueil).");return;}const payer=$("#e-payer").value;const perso=$("#e-perso")?$("#e-perso").checked:false;data.expenses.push({id:uid(),label,amount,payer,split:!perso});clear("e-label","e-amount");if($("#e-perso"))$("#e-perso").checked=false;save();renderBudget();renderStats();},
   "del-exp":(el)=>{data.expenses=data.expenses.filter(e=>e.id!==el.dataset.id);save();renderBudget();renderStats();}
 };
 function addCat(type,inputId){const v=val(inputId);if(!v)return;if(!data[LC[type].cats].includes(v))data[LC[type].cats].push(v);clear(inputId);save();renderList(type);}
@@ -906,7 +928,17 @@ function checkAllDone(type,cat,el){const all=data[LC[type].items].filter(i=>i.ca
 function onEdit(el){
   const act=el.dataset.act;
   if(act==="edit-meal"){const m=data.meals.find(x=>x.id===el.dataset.id);if(m){m[el.dataset.f]=el.innerText.trim();save();}}
-  else if(act==="edit-act"){const a=data.activities.find(x=>x.id===el.dataset.id);if(a){a[el.dataset.f]=el.innerText.trim();save();}}
+  else if(act==="edit-act"){
+    const a=data.activities.find(x=>x.id===el.dataset.id);
+    if(a){
+      if(el.dataset.f==="prix"){
+        a.prix=el.innerText.replace(",",".").replace(/[^\d.]/g,"").trim();
+        save();renderActs();
+      } else {
+        a[el.dataset.f]=el.innerText.trim();save();
+      }
+    }
+  }
   else if(act==="rename"){const type=el.dataset.type;const it=data[LC[type].items].find(i=>i.id===el.dataset.id);if(it&&el.innerText.trim()){it.name=el.innerText.trim();save();}}
 }
 
