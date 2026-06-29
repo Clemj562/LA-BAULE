@@ -411,7 +411,6 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
 
 <div class="container">
 
-  <!-- ========== HOME ========== -->
   <section id="home" class="page-section active">
     <div class="eyebrow">Juillet 2026 · Léa & Clem à</div>
     <h1 class="giant">LA <em>Baule</em><br></h1>
@@ -454,7 +453,6 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
     </div>
   </section>
 
-  <!-- ========== REPAS ========== -->
   <section id="repas" class="page-section">
     <div class="eyebrow">À table</div>
     <h1 class="section-title">Le menu de la <em style="font-style:italic;color:var(--coral)">semaine</em></h1>
@@ -488,7 +486,6 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
     <div class="cols" id="coursesBox" data-list="course"></div>
   </section>
 
-  <!-- ========== ACTIVITES ========== -->
   <section id="activites" class="page-section">
     <div class="eyebrow">Le planning</div>
     <h1 class="section-title">Le <em style="font-style:italic;color:var(--coral)">programme</em> des jours</h1>
@@ -511,7 +508,6 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
     <div id="actsBox"></div>
   </section>
 
-  <!-- ========== BAGAGES ========== -->
   <section id="bagages" class="page-section">
     <div class="eyebrow">Logistique</div>
     <h1 class="section-title">On boucle les <em style="font-style:italic;color:var(--coral)">valises</em></h1>
@@ -525,7 +521,6 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
     <div class="cols" id="packingBox" data-list="packing"></div>
   </section>
 
-  <!-- ========== BUDGET ========== -->
   <section id="budget" class="page-section">
     <div class="eyebrow">Les comptes</div>
     <h1 class="section-title">Qui doit <em style="font-style:italic;color:var(--coral)">quoi</em> à qui ?</h1>
@@ -540,11 +535,15 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
               <div><label class="field">Montant (€)</label><input id="e-amount" class="input" type="number" min="0" step="0.01" placeholder="48.90"></div>
               <div><label class="field">Payé par</label><select id="e-payer" class="input"></select></div>
             </div>
+            <div>
+              <label class="field">Type de partage</label>
+              <select id="e-type" class="input">
+                <option value="shared">👥 Dépense partagée (divisée entre tous)</option>
+                <option value="debt">🤝 Dette (remboursement complet par l'autre)</option>
+                <option value="perso">💳 Dépense perso (non partagée)</option>
+              </select>
+            </div>
           </div>
-          <label for="e-perso" style="display:flex;align-items:center;gap:11px;margin-top:16px;cursor:pointer;background:var(--paper);border:var(--bw) solid var(--ink);border-radius:var(--radius-sm);padding:12px 15px;box-shadow:2px 2px 0 var(--offset);font-weight:700;font-size:14px;line-height:1.35">
-            <input type="checkbox" id="e-perso" style="width:20px;height:20px;accent-color:var(--coral);flex:none;cursor:pointer">
-            💳 Dépense perso — pas de remboursement (non partagée)
-          </label>
           <button class="btn coral" style="margin-top:16px" data-act="add-exp"><i class="fa-solid fa-receipt"></i> Enregistrer</button>
         </div>
         <div class="card pad">
@@ -599,8 +598,13 @@ normalize();
 function normalize(){
   for(const k in D){ if(data[k]===undefined) data[k]=structuredClone(D[k]); }
   data.participants.forEach((p,i)=>{ if(!p.color) p.color=PALETTE[i%PALETTE.length]; });
-  // dépenses sans flag => considérées comme partagées
-  data.expenses.forEach(e=>{ if(e.split===undefined) e.split=true; });
+  // Rétrocompatibilité du format de partage des dépenses
+  data.expenses.forEach(e=>{ 
+    if(e.type===undefined){
+      if(e.split===false) e.type="perso";
+      else e.type="shared";
+    }
+  });
 }
 
 /* ---------- FIREBASE ---------- */
@@ -653,7 +657,7 @@ function renderStats(){
   const box=$("#statsStrip"); if(!box)return;
   const pc=data.packingItems.length, pd=data.packingItems.filter(i=>i.done).length;
   const cc=data.courseItems.length, cd=data.courseItems.filter(i=>i.done).length;
-  const total=data.expenses.filter(e=>e.split!==false).reduce((s,e)=>s+(+e.amount||0),0);
+  const total=data.expenses.filter(e=>e.type==="shared").reduce((s,e)=>s+(+e.amount||0),0);
   const mk=(lab,val,sub,pct,color)=>`<div class="stat" data-tab="${sub}"><div class="lab">${lab}</div><div class="val">${val}</div>${pct!=null?`<div class="progress"><i style="width:${pct}%;background:${color}"></i></div>`:`<div class="lab" style="margin-top:6px">${color}</div>`}</div>`;
   box.innerHTML =
     mk("Recettes",data.meals.length,"repas",null,"fiches au menu")+
@@ -757,53 +761,75 @@ function renderActs(){
 /* --- BUDGET --- */
 function renderBudget(){
   const expBox=$("#expBox"), setBox=$("#settleBox"); if(!expBox)return;
-  const shared=data.expenses.filter(e=>e.split!==false);
-  const sharedTotal=shared.reduce((s,e)=>s+(+e.amount||0),0);
-  const persoTotal=data.expenses.filter(e=>e.split===false).reduce((s,e)=>s+(+e.amount||0),0);
+  const shared = data.expenses.filter(e=>e.type==="shared");
+  const sharedTotal = shared.reduce((s,e)=>s+(+e.amount||0),0);
+  const otherTotal = data.expenses.filter(e=>e.type!=="shared").reduce((s,e)=>s+(+e.amount||0),0);
+  
   $("#bigTotal").textContent = sharedTotal.toFixed(2).replace(/\.00$/,"")+" €";
   const n=data.participants.length;
   let head = n? `soit ~${(sharedTotal/n).toFixed(0)} € par personne (${n})` : "Ajoutez des participants pour répartir.";
-  if(persoTotal>0) head += `<br><span style="font-size:13px;opacity:.85">+ ${persoTotal.toFixed(2).replace(/\.00$/,"")} € de dépenses perso (non partagées)</span>`;
+  if(otherTotal>0) head += `<br><span style="font-size:13px;opacity:.85">+ ${otherTotal.toFixed(2).replace(/\.00$/,"")} € de dépenses spécifiques (dettes / persos)</span>`;
   $("#perHead").innerHTML = head;
+  
   expBox.innerHTML = data.expenses.length? data.expenses.slice().reverse().map(e=>{
     const p=personById(e.payer);
-    const perso=e.split===false;
+    let typeLabel = "partagé entre tous";
+    let badge = "";
+    if(e.type === "perso") {
+      typeLabel = "perso, non partagée";
+      badge = `<span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:var(--sky);color:#1B2430;border:1.5px solid var(--ink);border-radius:20px;padding:3px 9px;font-weight:700;white-space:nowrap">perso</span>`;
+    } else if (e.type === "debt") {
+      typeLabel = "remboursement complet exigé (dette)";
+      badge = `<span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:var(--sun);color:#1B2430;border:1.5px solid var(--ink);border-radius:20px;padding:3px 9px;font-weight:700;white-space:nowrap">dette</span>`;
+    }
+    
     return `<div class="exp-row"><span class="who" style="background:${p?p.color:"#ccc"}">${p?esc(p.name[0].toUpperCase()):"?"}</span>
-      <div class="info"><b>${esc(e.label)}</b><small>payé par ${p?esc(p.name):"?"} · ${perso?"perso, non partagée":"partagé entre tous"}</small></div>
-      ${perso?`<span style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;background:var(--sun);color:#1B2430;border:1.5px solid var(--ink);border-radius:20px;padding:3px 9px;font-weight:700;white-space:nowrap">perso</span>`:""}
+      <div class="info"><b>${esc(e.label)}</b><small>payé par ${p?esc(p.name):"?"} · ${typeLabel}</small></div>
+      ${badge}
       <span class="amt">${(+e.amount).toFixed(2)} €</span>
       <button class="icon-btn del" data-act="del-exp" data-id="${e.id}" style="width:26px;height:26px;font-size:10px">✕</button></div>`;
   }).join("") : `<p class="empty">Aucune dépense enregistrée.</p>`;
   setBox.innerHTML = settlement();
 }
+
 function settlement(){
   const n=data.participants.length;
-  const shared=data.expenses.filter(e=>e.split!==false);
-  if(n<2||!shared.length) return `<p class="empty">Ajoutez des participants et des dépenses partagées.</p>`;
+  if(n<2||!data.expenses.length) return `<p class="empty">Ajoutez des participants et des dépenses.</p>`;
   
   const bal={}; const paid={};
   data.participants.forEach(p=>{ bal[p.id]=0; paid[p.id]=0; });
   
-  shared.forEach(e=>{
+  data.expenses.forEach(e=>{
     const amt=+e.amount||0;
-    const valid=data.participants;
-    if(!valid.length) return;
-    const share=amt/valid.length;
-    valid.forEach(p => bal[p.id]-=share);
-    if(bal[e.payer]!==undefined) {
+    if(bal[e.payer]===undefined) return;
+    
+    paid[e.payer]+=amt;
+    
+    if(e.type === "shared"){
+      const share=amt/n;
+      data.participants.forEach(p => bal[p.id]-=share);
       bal[e.payer]+=amt;
-      paid[e.payer]+=amt;
+    } 
+    else if(e.type === "debt"){
+      // Dette complète : L'autre personne (ou les autres) prend tout à sa charge
+      const others = data.participants.filter(p => p.id !== e.payer);
+      if(others.length > 0){
+        const share = amt / others.length;
+        others.forEach(p => bal[p.id] -= share);
+        bal[e.payer] += amt;
+      }
     }
+    // Si type === "perso", aucune répercussion sur les balances (bal), l'acheteur paie et garde tout.
   });
 
   let html = `<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1.5px dashed var(--muted)">`;
-  html += `<div style="font-size:11px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px">Bilan par personne (partagé)</div>`;
+  html += `<div style="font-size:11px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px">Bilan par personne (net calculé)</div>`;
   data.participants.forEach(p=>{
      const b = bal[p.id];
      const color = b > 0.01 ? "var(--ocean)" : (b < -0.01 ? "var(--coral)" : "var(--muted)");
      const sign = b > 0.01 ? "+" : "";
      html += `<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:14.5px;">
-       <span><b>${esc(p.name)}</b> <span style="opacity:0.6;font-size:13px">(a payé ${paid[p.id].toFixed(0)}€)</span></span>
+       <span><b>${esc(p.name)}</b> <span style="opacity:0.6;font-size:13px">(total sorti ${paid[p.id].toFixed(0)}€)</span></span>
        <strong style="color:${color}">${sign}${b.toFixed(2)} €</strong>
      </div>`;
   });
@@ -811,8 +837,6 @@ function settlement(){
 
   let cred=Object.entries(bal).filter(([,v])=>v>0.01).map(([id,v])=>({id,v}));
   let debt=Object.entries(bal).filter(([,v])=>v<-0.01).map(([id,v])=>({id,v:-v}));
-  let credMap = new Map(cred.map(c => [c.id, c]));
-  let debtMap = new Map(debt.map(d => [d.id, d]));
   cred.sort((a,b)=>b.v-a.v); debt.sort((a,b)=>b.v-a.v);
   const lines=[]; let i=0,j=0;
   while(i<debt.length&&j<cred.length){
@@ -917,7 +941,7 @@ const A = {
   "del-cat":(el)=>{const type=el.dataset.type,cat=el.dataset.cat;if(confirm(`Supprimer « ${cat} » et son contenu ?`)){data[LC[type].cats]=data[LC[type].cats].filter(c=>c!==cat);data[LC[type].items]=data[LC[type].items].filter(i=>i.cat!==cat);save();renderList(type);renderStats();}},
   "add-act":()=>{data.activities.push({id:uid(),jour:val("a-day")||"Jour",heure:val("a-time")||"–",titre:val("a-title")||"Activité",desc:val("a-desc"),prix:val("a-price")});clear("a-title","a-desc","a-time","a-price");save();renderActs();},
   "del-act":(el)=>{if(confirm("Supprimer cette activité ?")){data.activities=data.activities.filter(a=>a.id!==el.dataset.id);save();renderActs();}},
-  "add-exp":()=>{const label=val("e-label"),amount=parseFloat(val("e-amount"));if(!label||!(amount>0)){alert("Indiquez un intitulé et un montant.");return;}if(!data.participants.length){alert("Ajoutez d'abord des participants (page Accueil).");return;}const payer=$("#e-payer").value;const perso=$("#e-perso")?$("#e-perso").checked:false;data.expenses.push({id:uid(),label,amount,payer,split:!perso});clear("e-label","e-amount");if($("#e-perso"))$("#e-perso").checked=false;save();renderBudget();renderStats();},
+  "add-exp":()=>{const label=val("e-label"),amount=parseFloat(val("e-amount"));if(!label||!(amount>0)){alert("Indiquez un intitulé et un montant.");return;}if(!data.participants.length){alert("Ajoutez d'abord des participants (page Accueil).");return;}const payer=$("#e-payer").value;const type=$("#e-type").value;data.expenses.push({id:uid(),label,amount,payer,type});clear("e-label","e-amount");$("#e-type").value="shared";save();renderBudget();renderStats();},
   "del-exp":(el)=>{data.expenses=data.expenses.filter(e=>e.id!==el.dataset.id);save();renderBudget();renderStats();}
 };
 function addCat(type,inputId){const v=val(inputId);if(!v)return;if(!data[LC[type].cats].includes(v))data[LC[type].cats].push(v);clear(inputId);save();renderList(type);}
