@@ -232,9 +232,9 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
   box-shadow:var(--shadow-lg);display:flex;flex-direction:column;transition:.3s var(--ease)}
 .meal:hover{transform:translate(-3px,-3px);box-shadow:var(--shadow-xl)}
 .meal .ph{height:185px;background-size:cover;background-position:center;position:relative;border-bottom:var(--bw) solid var(--ink)}
-.meal .sticker{position:absolute;bottom:-14px;left:20px;background:var(--sun);color:#1B2430;
+.meal .sticker{position:absolute;bottom:-14px;left:20px;color:#1B2430;
   font-family:'Fraunces',serif;font-weight:900;font-size:12px;padding:7px 16px;border-radius:30px;
-  border:var(--bw) solid var(--ink);box-shadow:2px 2px 0 var(--offset);transform:rotate(-2deg)}
+  border:var(--bw) solid var(--ink);box-shadow:2px 2px 0 var(--offset);transform:rotate(-2deg);outline:none}
 .meal .body{padding:26px 22px 20px;display:flex;flex-direction:column;gap:6px;flex:1}
 .meal h3{font-size:23px}
 .lbl{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ocean);margin-top:10px}
@@ -459,9 +459,20 @@ label.field{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;t
 
     <div class="card pad" style="margin-bottom:30px">
       <h3 style="font-size:22px;margin-bottom:18px">➕ Nouvelle fiche repas</h3>
-      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
         <div><label class="field">Jour</label><input id="m-day" class="input" placeholder="Vendredi"></div>
         <div><label class="field">Moment</label><input id="m-moment" class="input" placeholder="Soir"></div>
+        <div><label class="field">Sticker / Badge (opt.)</label><input id="m-sticker" class="input" placeholder="Apéro, Pique-nique..."></div>
+        <div>
+          <label class="field">Couleur Fond Sticker</label>
+          <select id="m-bg" class="input">
+            <option value="var(--sun)">☀️ Jaune Soleil</option>
+            <option value="var(--coral)">🐙 Rouge Corail</option>
+            <option value="var(--ocean)">🌊 Bleu Océan</option>
+            <option value="var(--sky)">☁️ Bleu Ciel</option>
+            <option value="var(--rose)">🌸 Rose</option>
+          </select>
+        </div>
         <div><label class="field">Recette</label><input id="m-title" class="input" placeholder="Moules à la crème"></div>
         <div><label class="field">Photo (URL, option.)</label><input id="m-img" class="input" placeholder="https://…"></div>
       </div>
@@ -579,7 +590,7 @@ const PALETTE = ["#FF5D49","#0E7C86","#FFB627","#7FC6D9","#F4978E","#8E7DBE","#5
 
 /* ---------- DEFAULTS ---------- */
 const D = {
-  meals:[{id:"m1",jour:"VENDREDI",moment:"SOIR",titre:"Moules à la crème de poireaux",img:"https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=700&q=80",ingredients:"Moules de bouchot\nCrème fraîche liquide\nPoireaux émincés\nBeurre demi-sel",recette:"Faire fondre les poireaux au beurre, ajouter les moules à feu vif, napper de crème au moment de servir."}],
+  meals:[{id:"m1",jour:"VENDREDI",moment:"SOIR",stickerText:"VENDREDI · SOIR",stickerBg:"var(--sun)",titre:"Moules à la crème de poireaux",img:"https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=700&q=80",ingredients:"Moules de bouchot\nCrème fraîche liquide\nPoireaux émincés\nBeurre demi-sel",recette:"Faire fondre les poireaux au beurre, ajouter les moules à feu vif, napper de crème au moment de servir."}],
   activities:[{id:"a1",jour:"Samedi",heure:"16h00",titre:"Session catamaran",desc:"Rendez-vous à la base nautique de la baie de La Baule. Réservation confirmée.",prix:"35"}],
   packingCategories:["🩳 Garde-robe Océan","🧴 Trousse de Soins","🔌 Matériel & Utiles"],
   packingItems:[{id:"p1",cat:"🩳 Garde-robe Océan",name:"Sweat chaud pour le soir",done:false},{id:"p2",cat:"🧴 Trousse de Soins",name:"Crème solaire haute protection",done:false}],
@@ -598,12 +609,15 @@ normalize();
 function normalize(){
   for(const k in D){ if(data[k]===undefined) data[k]=structuredClone(D[k]); }
   data.participants.forEach((p,i)=>{ if(!p.color) p.color=PALETTE[i%PALETTE.length]; });
-  // Rétrocompatibilité du format de partage des dépenses
   data.expenses.forEach(e=>{ 
     if(e.type===undefined){
       if(e.split===false) e.type="perso";
       else e.type="shared";
     }
+  });
+  data.meals.forEach(m => {
+    if(!m.stickerText) m.stickerText = `${m.jour || "SAMEDI"} · ${m.moment || "MIDI"}`;
+    if(!m.stickerBg) m.stickerBg = "var(--sun)";
   });
 }
 
@@ -673,7 +687,6 @@ function renderPeople(){
     <div class="person"><span class="av" style="background:${p.color}">${esc((p.name||"?")[0].toUpperCase())}</span>${esc(p.name)}
     <span class="x" data-act="del-person" data-id="${p.id}">✕</span></div>`).join("")
     : `<p class="empty">Ajoutez les participants pour activer le partage des dépenses 👇</p>`;
-  // budget selectors
   const payer=$("#e-payer"); if(payer) payer.innerHTML=data.participants.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
 }
 
@@ -682,7 +695,9 @@ function renderMeals(){
   const box=$("#mealsBox"); if(!box)return;
   box.innerHTML = data.meals.length? data.meals.map(m=>`
     <div class="meal">
-      <div class="ph" style="background-image:url('${esc(m.img)}')"><span class="sticker">${esc(m.jour)} · ${esc(m.moment)}</span></div>
+      <div class="ph" style="background-image:url('${esc(m.img)}')">
+        <span class="sticker" contenteditable data-act="edit-meal" data-id="${m.id}" data-f="stickerText" style="background:${m.stickerBg || 'var(--sun)'}">${esc(m.stickerText)}</span>
+      </div>
       <div class="body">
         <h3 class="edit" contenteditable data-act="edit-meal" data-id="${m.id}" data-f="titre">${esc(m.titre)}</h3>
         <div class="lbl">🛒 Ingrédients</div>
@@ -802,7 +817,6 @@ function settlement(){
   data.expenses.forEach(e=>{
     const amt=+e.amount||0;
     if(bal[e.payer]===undefined) return;
-    
     paid[e.payer]+=amt;
     
     if(e.type === "shared"){
@@ -811,7 +825,6 @@ function settlement(){
       bal[e.payer]+=amt;
     } 
     else if(e.type === "debt"){
-      // Dette complète : L'autre personne (ou les autres) prend tout à sa charge
       const others = data.participants.filter(p => p.id !== e.payer);
       if(others.length > 0){
         const share = amt / others.length;
@@ -819,7 +832,6 @@ function settlement(){
         bal[e.payer] += amt;
       }
     }
-    // Si type === "perso", aucune répercussion sur les balances (bal), l'acheteur paie et garde tout.
   });
 
   let html = `<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1.5px dashed var(--muted)">`;
@@ -928,7 +940,24 @@ async function loadWeather(){
 const A = {
   "add-person":()=>{const v=val("newPerson");if(!v)return;data.participants.push({id:uid(),name:v,color:PALETTE[data.participants.length%PALETTE.length]});clear("newPerson");save();renderPeople();renderStats();renderBudget();},
   "del-person":(el)=>{data.participants=data.participants.filter(p=>p.id!==el.dataset.id);save();renderPeople();renderBudget();},
-  "add-meal":()=>{data.meals.push({id:uid(),jour:(val("m-day")||"SAMEDI").toUpperCase(),moment:(val("m-moment")||"MIDI").toUpperCase(),titre:val("m-title")||"Nouvelle recette",img:val("m-img")||"https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=700&q=80",ingredients:val("m-ing"),recette:val("m-rec")});clear("m-day","m-moment","m-title","m-img","m-ing","m-rec");save();renderMeals();renderStats();},
+  "add-meal":()=>{
+    const day = val("m-day") || "SAMEDI";
+    const moment = val("m-moment") || "MIDI";
+    const customSticker = val("m-sticker");
+    const bgSticker = val("m-bg") || "var(--sun)";
+    data.meals.push({
+      id:uid(),
+      jour:day.toUpperCase(),
+      moment:moment.toUpperCase(),
+      stickerText: customSticker || `${day.toUpperCase()} · ${moment.toUpperCase()}`,
+      stickerBg: bgSticker,
+      titre:val("m-title")||"Nouvelle recette",
+      img:val("m-img")||"https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=700&q=80",
+      ingredients:val("m-ing"),
+      recette:val("m-rec")
+    });
+    clear("m-day","m-moment","m-sticker","m-title","m-img","m-ing","m-rec");save();renderMeals();renderStats();
+  },
   "del-meal":(el)=>{if(confirm("Supprimer cette recette ?")){data.meals=data.meals.filter(m=>m.id!==el.dataset.id);save();renderMeals();renderStats();}},
   "meal-to-cart":(el)=>{const m=data.meals.find(x=>x.id===el.dataset.id);if(!m)return;const cat="🍽️ "+m.titre.slice(0,22);if(!data.courseCategories.includes(cat))data.courseCategories.push(cat);(m.ingredients||"").split("\n").map(s=>s.trim()).filter(Boolean).forEach(ing=>{data.courseItems.push({id:uid(),cat,name:ing,done:false});});save();renderList("course");renderStats();pop(el);alert("Ingrédients ajoutés au caddie 🛒 (rayon « "+cat+" »)");},
   "add-course-cat":()=>addCat("course","course-cat"),
