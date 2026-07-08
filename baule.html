@@ -593,6 +593,7 @@ const D = {
   meals:[{id:"m1",jour:"VENDREDI",moment:"SOIR",stickerText:"VENDREDI · SOIR",stickerBg:"var(--sun)",titre:"Moules à la crème de poireaux",img:"https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=700&q=80",ingredients:"Moules de bouchot\nCrème fraîche liquide\nPoireaux émincés\nBeurre demi-sel",recette:"Faire fondre les poireaux au beurre, ajouter les moules à feu vif, napper de crème au moment de servir."}],
   activities:[{id:"a1",jour:"Samedi",heure:"16h00",titre:"Session catamaran",desc:"Rendez-vous à la base nautique de la baie de La Baule. Réservation confirmée.",prix:"35"}],
   packingCategories:["🩳 Garde-robe Océan","🧴 Trousse de Soins","🔌 Matériel & Utiles"],
+  packingOwners:{}, // NOUVEAU: Mémorisation des propriétaires pour préserver la rétrocompatibilité
   packingItems:[{id:"p1",cat:"🩳 Garde-robe Océan",name:"Sweat chaud pour le soir",done:false},{id:"p2",cat:"🧴 Trousse de Soins",name:"Crème solaire haute protection",done:false}],
   courseCategories:["🥦 Primeur & Légumes","🥩 Poissonnerie & Frais","🍹 Cave à Apéro"],
   courseItems:[{id:"c1",cat:"🍹 Cave à Apéro",name:"Cidre fermier breton",done:false}],
@@ -608,6 +609,7 @@ normalize();
 
 function normalize(){
   for(const k in D){ if(data[k]===undefined) data[k]=structuredClone(D[k]); }
+  if(!data.packingOwners) data.packingOwners = {}; // rétrocompatibilité locales pour les users existants
   data.participants.forEach((p,i)=>{ if(!p.color) p.color=PALETTE[i%PALETTE.length]; });
   data.expenses.forEach(e=>{ 
     if(e.type===undefined){
@@ -726,20 +728,42 @@ function renderList(type){
     const all=items.filter(i=>i.cat===cat);
     const done=all.filter(i=>i.done).length;
     const pct=all.length?Math.round(done/all.length*100):0;
-    return `<div class="col" data-cat="${esc(cat)}">
-      <div class="col-head"><h3>${esc(cat)}</h3>
-        <button class="icon-btn del" data-act="del-cat" data-type="${type}" data-cat="${esc(cat)}" style="width:26px;height:26px;font-size:10px">✕</button></div>
-      <div class="progress"><i style="width:${pct}%"></i></div>
+    
+    // NOUVEAU: Personnalisation visuelle selon le propriétaire (Bagages)
+    let colStyle = "";
+    let owner = null;
+    if(type === 'packing' && data.packingOwners && data.packingOwners[cat]) {
+        owner = personById(data.packingOwners[cat]);
+        if(owner) colStyle = `background:color-mix(in srgb, ${owner.color} 25%, var(--card));border-color:${owner.color};`;
+    }
+
+    return `<div class="col" data-cat="${esc(cat)}" style="${colStyle}">
+      <div class="col-head">
+        <div style="display:flex; flex-direction:column; gap:6px; flex:1; min-width:0">
+          <h3 style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cat)}</h3>
+          ${type === 'packing' ? `
+            <select class="input" style="padding:3px 6px; font-size:11.5px; width:fit-content; box-shadow:none; border-width:1.5px; height:auto; min-height:0" data-act="assign-cat" data-cat="${esc(cat)}">
+              <option value="">🎒 Pour tous</option>
+              ${data.participants.map(p => `<option value="${p.id}" ${data.packingOwners?.[cat]===p.id?'selected':''}>👤 ${esc(p.name)}</option>`).join('')}
+            </select>
+          ` : ''}
+        </div>
+        <div style="display:flex; gap:6px; flex:none;">
+          ${type === 'packing' ? `<button class="icon-btn" data-act="dup-cat" data-type="${type}" data-cat="${esc(cat)}" style="width:28px;height:28px;font-size:11px" title="Dupliquer la liste"><i class="fa-solid fa-copy"></i></button>` : ''}
+          <button class="icon-btn del" data-act="del-cat" data-type="${type}" data-cat="${esc(cat)}" style="width:28px;height:28px;font-size:11px" title="Supprimer">✕</button>
+        </div>
+      </div>
+      <div class="progress" style="${owner ? `border-color:${owner.color}` : ''}"><i style="width:${pct}%; ${owner ? `background:${owner.color}` : ''}"></i></div>
       ${list.map(i=>`
-        <div class="row ${i.done?"done":""}" draggable="true" data-id="${i.id}" data-type="${type}">
+        <div class="row ${i.done?"done":""}" draggable="true" data-id="${i.id}" data-type="${type}" style="${owner && i.done ? `background:color-mix(in srgb, ${owner.color} 15%, var(--paper));` : ''}">
           <span class="grip"><i class="fa-solid fa-grip-vertical"></i></span>
-          <span class="chk" data-act="toggle" data-type="${type}" data-id="${i.id}"><i class="fa-solid fa-check"></i></span>
+          <span class="chk" data-act="toggle" data-type="${type}" data-id="${i.id}" style="${owner && i.done ? `background:${owner.color};border-color:${owner.color};color:#fff` : ''}"><i class="fa-solid fa-check"></i></span>
           <span class="nm" contenteditable data-act="rename" data-type="${type}" data-id="${i.id}">${esc(i.name)}</span>
           <button class="icon-btn del" data-act="del-item" data-type="${type}" data-id="${i.id}" style="width:24px;height:24px;font-size:9px">✕</button>
         </div>`).join("")||`<p class="empty">${q?"Aucun résultat.":"Liste vide."}</p>`}
       <div class="add-inline">
         <input type="text" class="input" placeholder="Ajouter…" data-quickadd="${type}" data-cat="${esc(cat)}">
-        <button class="btn coral sm" data-act="quickadd" data-type="${type}" data-cat="${esc(cat)}"><i class="fa-solid fa-plus"></i></button>
+        <button class="btn coral sm" data-act="quickadd" data-type="${type}" data-cat="${esc(cat)}" style="${owner ? `background:${owner.color};` : ''}"><i class="fa-solid fa-plus"></i></button>
       </div>
     </div>`;
   }).join("") : `<p class="empty">Créez un premier rayon / une première liste ci-dessus.</p>`;
@@ -967,7 +991,45 @@ const A = {
   "quickadd":(el)=>{const type=el.dataset.type,cat=el.dataset.cat;const inp=document.querySelector(`[data-quickadd="${type}"][data-cat="${CSS.escape(cat)}"]`);const v=inp?inp.value.trim():"";if(!v)return;data[LC[type].items].push({id:uid(),cat,name:v,done:false});save();renderList(type);renderStats();},
   "toggle":(el)=>{const type=el.dataset.type;const it=data[LC[type].items].find(i=>i.id===el.dataset.id);if(it){it.done=!it.done;save();renderList(type);renderStats();if(it.done)checkAllDone(type,it.cat,el);}},
   "del-item":(el)=>{const type=el.dataset.type;data[LC[type].items]=data[LC[type].items].filter(i=>i.id!==el.dataset.id);save();renderList(type);renderStats();},
-  "del-cat":(el)=>{const type=el.dataset.type,cat=el.dataset.cat;if(confirm(`Supprimer « ${cat} » et son contenu ?`)){data[LC[type].cats]=data[LC[type].cats].filter(c=>c!==cat);data[LC[type].items]=data[LC[type].items].filter(i=>i.cat!==cat);save();renderList(type);renderStats();}},
+  "del-cat":(el)=>{
+    const type=el.dataset.type,cat=el.dataset.cat;
+    if(confirm(`Supprimer « ${cat} » et son contenu ?`)){
+      data[LC[type].cats]=data[LC[type].cats].filter(c=>c!==cat);
+      data[LC[type].items]=data[LC[type].items].filter(i=>i.cat!==cat);
+      if(type === 'packing' && data.packingOwners) delete data.packingOwners[cat];
+      save();renderList(type);renderStats();
+    }
+  },
+  // NOUVEAU: Duplication de liste
+  "dup-cat":(el)=>{
+    const type = el.dataset.type;
+    const oldCat = el.dataset.cat;
+    let newCat = prompt("Nom de la nouvelle liste (copie) ?", oldCat + " (Copie)");
+    if(!newCat || newCat === oldCat) return;
+    if(data[LC[type].cats].includes(newCat)){ alert("Ce nom existe déjà."); return; }
+
+    data[LC[type].cats].push(newCat);
+
+    // Reprend le même propriétaire si existant
+    if(type === "packing" && data.packingOwners && data.packingOwners[oldCat]) {
+      data.packingOwners[newCat] = data.packingOwners[oldCat];
+    }
+
+    // Copie les éléments sans l'état coché
+    const itemsToCopy = data[LC[type].items].filter(i => i.cat === oldCat);
+    itemsToCopy.forEach(i => {
+      data[LC[type].items].push({
+        id: uid(),
+        cat: newCat,
+        name: i.name,
+        done: false 
+      });
+    });
+
+    save();
+    renderList(type);
+    renderStats();
+  },
   "add-act":()=>{data.activities.push({id:uid(),jour:val("a-day")||"Jour",heure:val("a-time")||"–",titre:val("a-title")||"Activité",desc:val("a-desc"),prix:val("a-price")});clear("a-title","a-desc","a-time","a-price");save();renderActs();},
   "del-act":(el)=>{if(confirm("Supprimer cette activité ?")){data.activities=data.activities.filter(a=>a.id!==el.dataset.id);save();renderActs();}},
   "add-exp":()=>{const label=val("e-label"),amount=parseFloat(val("e-amount"));if(!label||!(amount>0)){alert("Indiquez un intitulé et un montant.");return;}if(!data.participants.length){alert("Ajoutez d'abord des participants (page Accueil).");return;}const payer=$("#e-payer").value;const type=$("#e-type").value;data.expenses.push({id:uid(),label,amount,payer,type});clear("e-label","e-amount");$("#e-type").value="shared";save();renderBudget();renderStats();},
@@ -1015,6 +1077,22 @@ document.addEventListener("input",e=>{
   if(e.target.id==="course-search")renderList("course");
   if(e.target.id==="packing-search")renderList("packing");
   if(e.target.id==="tripDate"){data.tripDate=e.target.value;save();}
+});
+
+// NOUVEAU: Écouteur pour modifier le propriétaire d'une liste
+document.addEventListener("change", e => {
+  if(e.target.dataset && e.target.dataset.act === "assign-cat") {
+    const cat = e.target.dataset.cat;
+    const ownerId = e.target.value;
+    if(!data.packingOwners) data.packingOwners = {};
+    if(ownerId) {
+      data.packingOwners[cat] = ownerId;
+    } else {
+      delete data.packingOwners[cat];
+    }
+    save();
+    renderList("packing");
+  }
 });
 
 /* ---------- DRAG & DROP ---------- */
